@@ -1,109 +1,104 @@
-# TCT 
-[![Go](https://img.shields.io/badge/Built_with-Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
-[![Version](https://img.shields.io/badge/version-0.2.3-blue.svg?style=for-the-badge)](https://t.me/TheCarlTech)
 
-> *A Fast WA Bot Built with Go.* 
-  *(Go Edition)*
+/**
+ * SRK BOT – FULL VERSION
+ * Features:
+ * - Owner/Admin only commands
+ * - Send photo with command
+ * - Tag all members with different messages
+ * - Reply, tag reply, group name change, text message
+ */
 
-## About
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const fs = require("fs");
+const path = require("path");
 
-> **TCT** is a powerful, fast WA bot manager engineered for both personal and group administration. It delivers complete control over your WA experience through a suite of enterprise-grade features, robust security, a highly modular architecture, and multi-language support for seamless communication across diverse communities.
----
+const OWNER_NUMBER = "91XXXXXXXXXX"; // <-- CHANGE THIS
+const BOT_NAME = "SRK BOT";
 
-## Supported Languages
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info");
 
-- **Arabic (ar)** 🇸🇦
-- **English (en)** 🇺🇸
-- **Spanish (es)** 🇪🇸
-- **French (fr)** 🇫🇷
-- **Hindi (hi)** 🇮🇳
-- **Portuguese (pt)** 🇵🇹
-- **Russian (ru)** 🇷🇺
-- **Indonesian (id)** 🇮🇩
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        keepAliveIntervalMs: 15000
+    });
 
-> To change the bot’s language, use the **.lang** command followed by the language code:
-ie
-```
-.lang en 
-```
----
+    sock.ev.on("creds.update", saveCreds);
 
-## Why Use TCT?
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-- ⚡️ **Pure Go Performance** - Lightning fast, low memory usage, and highly concurrent.
+        const from = msg.key.remoteJid;
+        const isGroup = from.endsWith("@g.us");
+        const sender = msg.key.participant || from;
 
----
+        const text =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            "";
 
-## 🏃‍♂️ Quick Start
+        if (!text.startsWith("!")) return;
 
-### 🔑 **Step 1: Generate Your Session**
+        const groupMeta = isGroup ? await sock.groupMetadata(from) : null;
+        const admins = isGroup ? groupMeta.participants.filter(p => p.admin).map(p => p.id) : [];
 
-- Before deploying, you must link your WA account.
+        const isOwner = sender.includes(OWNER_NUMBER);
+        const isAdmin = isGroup && admins.includes(sender);
 
-[![Get Session](https://img.shields.io/badge/GET-SESSION_ID-success?style=for-the-badge&logo=whatsapp)](https://i-tct.com/pair/qr)
+        if (!isOwner && !isAdmin) return;
 
----
+        const args = text.trim().split(" ");
+        const cmd = args[0].toLowerCase();
 
-### 🐧 Deploy on Linux / Ubuntu / VPS
+        // HELLO
+        if (cmd === "!hello") {
+            await sock.sendMessage(from, { text: `👋 Hello! ${BOT_NAME} active hai 😎` });
+        }
 
-- Run the following command in your terminal.
+        // SEND PHOTO
+        if (cmd === "!photo") {
+            const photoPath = path.join(__dirname, "photo.jpg"); // add your photo here
+            if (!fs.existsSync(photoPath)) {
+                await sock.sendMessage(from, { text: "❌ photo.jpg file nahi mili" });
+                return;
+            }
+            await sock.sendMessage(from, {
+                image: fs.readFileSync(photoPath),
+                caption: "SRK BOT PHOTO MESSAGE"
+            });
+        }
 
-```bash
-bash <(curl -s https://i-tct.com/dl/vps)
-```
----
+        // TEXT MESSAGE
+        if (cmd === "!text") {
+            const number = args[1];
+            const message = args.slice(2).join(" ");
+            await sock.sendMessage(number + "@s.whatsapp.net", { text: message });
+        }
 
-### 🪟 Deploy on Windows
-- Open PowerShell 
+        // GROUP NAME CHANGE
+        if (cmd === "!groupname" && isGroup) {
+            const newName = args.slice(1).join(" ");
+            await sock.groupUpdateSubject(from, newName);
+        }
 
-- Type the exact command below:
+        // TAG ALL WITH DIFFERENT MESSAGES
+        if (cmd === "!tagall" && isGroup) {
+            const members = groupMeta.participants.map(p => p.id);
 
-```Powershel
-irm https://i-tct.com/dl/windows | iex
-```
-- Follow the on-screen guide to complete installation.
+            let count = 1;
+            for (let user of members) {
+                await sock.sendMessage(from, {
+                    text: `👋 Hey ${count}! Message from ${BOT_NAME}`,
+                    mentions: [user]
+                });
+                count++;
+            }
+        }
+    });
 
----
+    console.log(`🤖 ${BOT_NAME} started...`);
+}
 
-### ☁️ Deploy on Heroku
-- Click the button below to deploy
-
-[![Deploy to Heroku](https://img.shields.io/badge/Deploy_to-Heroku-430098?style=for-the-badge&logo=heroku&logoColor=white)](https://i-tct.com/heroku/)
-> ⚠️ **Note:** The example `formation` section below may not apply to everyone. Edit the `formation` in `app.json` to suit your Heroku plan.
-
----
-
----
-
-### ☁️Deploy  on Render
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://i-tct.com/render/)
-
----
-
-### Deploy On Termux
-
-- copy the command bellow and follow the guide
-
-```
-bash <(curl -sL https://i-tct.com/dl/termux)
-```
-
----
-
-
-### 🖥️ Deploy via Web Panel
-[![Panel Deploy](https://img.shields.io/badge/Deploy-Web_Panel-009688?style=for-the-badge&logo=web)](https://i-tct.com/panel/)
----
-### 🚀 TCT MD Resources
-[![Panel](https://img.shields.io/badge/Panel-0066CC?style=flat-square&logo=web&logoColor=white)](https://i-tct.com/panel/) 
-[![Heroku](https://img.shields.io/badge/Heroku-430098?style=flat-square&logo=heroku&logoColor=white)](https://i-tct.com/heroku/) 
-[![Termux](https://img.shields.io/badge/Termux-00BFA5?style=flat-square&logo=android&logoColor=white)](https://i-tct.com/termux) 
-[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://i-tct.com/windows) 
-[![VPS](https://img.shields.io/badge/VPS-FCC624?style=flat-square&logo=linux&logoColor=black)](https://i-tct.com/vps) 
-[![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white)](https://i-tct.com/render/) 
-[![Support](https://img.shields.io/badge/Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/TheCarlTech) 
-[![Docs](https://img.shields.io/badge/Documentation-8A2BE2?style=flat-square&logo=gitbook&logoColor=white)](https://i-tct.com/docs/) 
-[![Windows Zip](https://img.shields.io/badge/Windows_Zip-0078D6?style=flat-square&logo=windows&logoColor=white)](https://i-tct.com/dl/tct-windows.zip) 
-[![Termux Zip](https://img.shields.io/badge/Termux_Zip-00BFA5?style=flat-square&logo=android&logoColor=white)](https://i-tct.com/dl/tct.zip) 
-
----
+startBot();
