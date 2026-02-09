@@ -1,74 +1,104 @@
-{
-  "name": "TCT",
-  "description": "A fast WA bot built with Go",
-  "keywords": [
-    "tct",
-    "go",
-    "whatsapp",
-    "bot"
-  ],
-  "stack": "heroku-24",
-  "env": {
-    "SESSION_ID": {
-      "description": "Your WhatsApp session ID (REQUIRED)",
-      "value": "",
-      "required": true
-    },
-    "PREFIX": {
-      "description": "Command prefixes (comma separated, leave empty for no prefix)",
-      "value": ".",
-      "required": false
-    },
-    "TIMEZONE": {
-      "description": "Your timezone (e.g., Africa/Nairobi, America/New_York)",
-      "value": "Africa/Nairobi",
-      "required": false
-    },
-    "DB_BATCH_SIZE": {
-      "description": "Database batch size for performance",
-      "value": "400",
-      "required": false
-    },
-    "DB_FLUSH_INTERVAL": {
-      "description": "Database flush interval in milliseconds",
-      "value": "3000",
-      "required": false
-    },
-    "DB_CACHE_MAX_BYTES": {
-      "description": "Database cache size in bytes",
-      "value": "67108864",
-      "required": false
-    },
-    "DB_BUSY_TIMEOUT_MS": {
-      "description": "Database busy timeout in milliseconds",
-      "value": "12000",
-      "required": false
-    },
-    "CLOUDINARY_CLOUD_NAME": {
-      "description": "Your Cloudinary cloud name",
-      "value": "",
-      "required": false
-    },
-    "CLOUDINARY_API_KEY": {
-      "description": "Your Cloudinary API key",
-      "value": "",
-      "required": false
-    },
-    "CLOUDINARY_API_SECRET": {
-      "description": "Your Cloudinary API secret",
-      "value": "",
-      "required": false
-    },
-    "OPENWEATHER_API_KEY": {
-      "description": "OpenWeather API key for weather commands (optional)",
-      "value": "",
-      "required": false
-    }
-  },
-  "formation": {
-    "worker": {
-      "quantity": 1,
-      "size": "eco"
-    }
-  }
+
+/**
+ * SRK BOT – FULL VERSION
+ * Features:
+ * - Owner/Admin only commands
+ * - Send photo with command
+ * - Tag all members with different messages
+ * - Reply, tag reply, group name change, text message
+ */
+
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const fs = require("fs");
+const path = require("path");
+
+const OWNER_NUMBER = "91XXXXXXXXXX"; // <-- CHANGE THIS
+const BOT_NAME = "SRK BOT";
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info");
+
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        keepAliveIntervalMs: 15000
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const from = msg.key.remoteJid;
+        const isGroup = from.endsWith("@g.us");
+        const sender = msg.key.participant || from;
+
+        const text =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            "";
+
+        if (!text.startsWith("!")) return;
+
+        const groupMeta = isGroup ? await sock.groupMetadata(from) : null;
+        const admins = isGroup ? groupMeta.participants.filter(p => p.admin).map(p => p.id) : [];
+
+        const isOwner = sender.includes(OWNER_NUMBER);
+        const isAdmin = isGroup && admins.includes(sender);
+
+        if (!isOwner && !isAdmin) return;
+
+        const args = text.trim().split(" ");
+        const cmd = args[0].toLowerCase();
+
+        // HELLO
+        if (cmd === "!hello") {
+            await sock.sendMessage(from, { text: `👋 Hello! ${BOT_NAME} active hai 😎` });
+        }
+
+        // SEND PHOTO
+        if (cmd === "!photo") {
+            const photoPath = path.join(__dirname, "photo.jpg"); // add your photo here
+            if (!fs.existsSync(photoPath)) {
+                await sock.sendMessage(from, { text: "❌ photo.jpg file nahi mili" });
+                return;
+            }
+            await sock.sendMessage(from, {
+                image: fs.readFileSync(photoPath),
+                caption: "SRK BOT PHOTO MESSAGE"
+            });
+        }
+
+        // TEXT MESSAGE
+        if (cmd === "!text") {
+            const number = args[1];
+            const message = args.slice(2).join(" ");
+            await sock.sendMessage(number + "@s.whatsapp.net", { text: message });
+        }
+
+        // GROUP NAME CHANGE
+        if (cmd === "!groupname" && isGroup) {
+            const newName = args.slice(1).join(" ");
+            await sock.groupUpdateSubject(from, newName);
+        }
+
+        // TAG ALL WITH DIFFERENT MESSAGES
+        if (cmd === "!tagall" && isGroup) {
+            const members = groupMeta.participants.map(p => p.id);
+
+            let count = 1;
+            for (let user of members) {
+                await sock.sendMessage(from, {
+                    text: `👋 Hey ${count}! Message from ${BOT_NAME}`,
+                    mentions: [user]
+                });
+                count++;
+            }
+        }
+    });
+
+    console.log(`🤖 ${BOT_NAME} started...`);
 }
+
+startBot();
